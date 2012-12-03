@@ -1,5 +1,8 @@
+*~
+erl_crash.dump
 .eunit
 deps
 *.o
 *.beam
 *.plt
+var/*

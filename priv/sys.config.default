@@ -1,0 +1,17 @@
+%% -*- erlang -*-
+[{spiderl,
+  [
+   {start_pages, "./priv/start_links.csv"},
+   {url_matches, "./priv/url_matches.txt"},
+   {no_of_spiders, 4},
+   {output_file, "./priv/words"}o
+  ]},
+
+ {sasl,
+  [
+   {sasl_error_logger,        false},
+   {error_logger_mf_dir,      "var/logs/error"},
+   {error_logger_mf_maxbytes, 10485760},
+   {error_logger_mf_maxfiles, 10}
+  ]}
+].
