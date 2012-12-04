@@ -6,6 +6,7 @@
               {mod,{spiderl_app,[]}},
               {env,[]},
               {modules,[
+                        start,
                         spiderl_app,
                         spiderl_sup,
                         spiderl_srv,

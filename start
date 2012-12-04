@@ -14,7 +14,7 @@ main([]) ->
         ++ "\"erl -name " ++ Node ++ " "
         ++ "-pa ./deps/mochiweb/ebin ./deps/mochiweb_xpath/ebin ./ebin "
         ++ "-config var/sys.config "
-        ++ "-run application start spiderl\"",
+        ++ "-run start start\"",
 
     case os:cmd(Cmd) of
         []   ->

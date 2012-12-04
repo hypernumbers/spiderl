@@ -16,7 +16,7 @@
         ]).
 
 -export([
-         parse_tags/0
+         dump/0
         ]).
 
 %% gen_server callbacks
@@ -27,21 +27,37 @@
 
 -record(state,
         {
-          inited = false,
           output_file,
           no_of_spiders = 0,
           url_matches = [],
-          processed_links = dict:new(),
-          unprocessed_links = dict:new(),
-          words = []
+          processed_links = [],
+          unprocessed_links = [],
+          words = dict:new()
+         }).
+
+-record(tag,
+        {
+          tag,
+          no_of_plugins,
+          plugins = []
+          }).
+
+-record(word,
+        {
+          word,
+          tag,
+          occurences,
+          no_of_plugins_in = 0,
+          plugins = []
          }).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-parse_tags() ->
-    io:format("about to call gen server..."),
-    gen_server:cast(?MODULE, parse_tags).
+dump() ->
+    List = gen_server:call(?MODULE, dump),
+    [io:format("~s~n", [lists:flatten(X)]) || X <- List],
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -69,11 +85,16 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 init([]) ->
-    {ok, File} = application:get_env(spiderl, url_matches),
-    Matches = file:consult(File),
+    {ok, File1} = application:get_env(spiderl, url_matches),
+    Matches = file:consult(File1),
+    {ok, File2} = application:get_env(spiderl, start_pages),
+    Terms = parse_csv:parse_file(File2),
+    {Words, Unproc} = process_tags(Terms, dict:new()),
     {ok, NoSpiders}  = application:get_env(spiderl, no_of_spiders),
     {ok, OutputFile} = application:get_env(spiderl, output_file),
-    {ok, #state{no_of_spiders = NoSpiders,
+    {ok, #state{words = Words,
+                unprocessed_links = Unproc,
+                no_of_spiders = NoSpiders,
                 output_file = OutputFile,
                 url_matches = Matches}}.
 
@@ -91,8 +112,32 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call(Request, _From, State) ->
-    io:format("Request is ~p~n", [Request]),
+handle_call(dump, _From, State) ->
+    Dump1 = [
+            io_lib:format("Output File:   ~p", [State#state.output_file]),
+            io_lib:format("No Of Spiders: ~p", [State#state.no_of_spiders]),
+            io_lib:format("URL Matches:   ~p", [State#state.url_matches]),
+            io_lib:format("Output File:   ~p", [State#state.output_file]),
+            "Processed links:"
+            "----------------"
+            ],
+    Dump2 = [
+             "Unprocessed links:",
+            "------------------"
+            ],
+    Dump3 = [
+             "Words:",
+             "------"
+            ],
+
+    Reply = lists:append([
+                          Dump1, State#state.processed_links,
+                          Dump2, State#state.unprocessed_links,
+                          Dump3, dump_words(State#state.words)
+                         ]),
+
+    {reply, Reply, State};
+handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
 
@@ -106,18 +151,7 @@ handle_call(Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast(parse_tags, #state{inited = false} = State) ->
-    io:format("in parse tags (1)..."),
-    {ok, File} = application:get_env(spiderl, start_pages),
-    Terms = parse_csv:parse_file(File),
-    {Words, Unproc} = process_tags(Terms),
-    {noreply, State#state{unprocessed_links = Unproc, words = Words,
-                          inited = true}};
-handle_cast(parse_tags, #state{inited = true} = State) ->
-    io:format("Cant reinit...~n"),
-    {noreply, State};
-handle_cast(Msg, State) ->
-    io:format("in parse tags (3) for ~p~n", [Msg]),
+handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -161,6 +195,28 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-process_tags(Terms) ->
-    io:format("Terms is ~p~n", [Terms]),
-    {bish, bash}.
+process_tags(Terms, Words) -> p2(Terms, Words, []).
+
+p2([], Words, Acc) -> {Words, Acc};
+p2([H | T], Words, Acc) ->
+    {Link, NoTags, Word} = H,
+    Tag = #tag{tag = Word, no_of_plugins = list_to_integer(NoTags)},
+    NewWords = add_tag(Words, Tag),
+    p2(T, NewWords, [Link | Acc]).
+
+add_tag(Words, Tag) ->
+    #tag{tag = Word} = Tag,
+    NewW = case dict:is_key(Word, Words) of
+        true  -> W = dict:fetch(Word, Words),
+                 W#word{tag = Tag};
+        false -> #word{word = Word, tag = Tag}
+    end,
+    dict:store(Word, NewW, Words).
+
+dump_words(Words) -> Keys = dict:fetch_keys(Words),
+                     d2(Keys, Words, []).
+
+d2([], _Words, Acc)     -> lists:sort(Acc);
+d2([H | T], Words, Acc) -> W = dict:fetch(H, Words),
+                           NewAcc = io_lib:format("~p", [W]),
+                           d2(T, Words, [NewAcc | Acc]).
